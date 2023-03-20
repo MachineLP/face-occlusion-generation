@@ -205,7 +205,7 @@ class Occlusion_Generator:
             # cv2.imwrite(img_name, img_copy[x:x+200, y:y+400, :])
             if im_dst_black[x, y,0]> 0 :
                 left_eye_flag += 1
-        if left_eye_flag >=2:
+        if left_eye_flag >=3:
             label_list.append(1)
         else:
             label_list.append(0)
@@ -217,7 +217,7 @@ class Occlusion_Generator:
             y = int(box[1])+int(landmarks[per_i][0])
             if im_dst_black[x, y,0]> 0 :
                 right_eye_flag += 1
-        if right_eye_flag >=2:
+        if right_eye_flag >=3:
             label_list.append(1)
         else:
             label_list.append(0)
@@ -228,7 +228,7 @@ class Occlusion_Generator:
             y = int(box[1])+int(landmarks[per_i][0])
             if im_dst_black[x, y,0]> 0 :
                 nose_flag += 1
-        if nose_flag >=2:
+        if nose_flag >=3:
             label_list.append(1)
         else:
             label_list.append(0)
