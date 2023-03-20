@@ -17,6 +17,10 @@ from utils.paste_over import *
 from utils.random_shape_generator import *
 from configs.config import cfg
 
+import onnxruntime
+from face_stickers.mtcnn import MTCNN
+
+
 #https://github.com/open-mmlab/mmediting/blob/23213c839ff2d1907a80d6ea29f13c32a24bb8ef/mmedit/apis/train.py
 def set_random_seed(seed, deterministic=False):
     """Set random seed.
@@ -45,7 +49,12 @@ class Occlusion_Generator:
         self.images_list=images_list
         self.occluders_list=occluders_list
         self.seeds=seeds
-        
+        self.session = onnxruntime.InferenceSession("./v3.onnx", None)
+        # get the name of the first input of the model
+        self.input_name = self.session.get_inputs()[0].name
+        self.mtcnn = MTCNN('./face_stickers/pb/mtcnn.pb')
+        self.iii = 0
+
     def occlude_images(self,index):
         try:
             image=self.images_list[index]
@@ -57,6 +66,7 @@ class Occlusion_Generator:
 
             # get source img and mask
             src_img, src_mask = get_srcNmask(image,self.args["srcImageDir"],self.args["srcMaskDir"])
+            img_copy = src_img.copy().astype(np.uint8)
 
             #get occluder img and mask
             if self.args["randomOcclusion"]:
@@ -90,7 +100,9 @@ class Occlusion_Generator:
                 occlusion_mask=np.zeros(src_mask.shape, np.uint8)
                 occlusion_mask[(occlusion_mask>0) & (occlusion_mask<255)]=255
                 #paste occluder to src image
-                result_img,result_mask,occlusion_mask=paste_over(occluder_img,occluder_mask,src_img,src_mask,occluder_coord,occlusion_mask,self.args["randomOcclusion"])
+                result_img,result_mask,occlusion_mask,im_dst_black=paste_over(occluder_img,occluder_mask,src_img,src_mask,occluder_coord,occlusion_mask,self.args["randomOcclusion"])
+                self.annotate_data("{}.jpg".format( image.split(".")[0] ), img_copy, im_dst_black)
+                # "{}.jpg".format( image.split(".")[0] )
             except Exception as e:
                 print(e)
                 print(f'Failed: {image} , {occluder}')
@@ -105,8 +117,8 @@ class Occlusion_Generator:
 
 
             # augment occluded image
-            transformed  = self.image_augmentor(image=result_img, mask=result_mask,mask1= occlusion_mask)
-            result_img, result_mask,occlusion_mask = transformed["image"],transformed["mask"],transformed["mask1"]
+            #transformed  = self.image_augmentor(image=result_img, mask=result_mask,mask1= occlusion_mask)
+            #result_img, result_mask,occlusion_mask = transformed["image"],transformed["mask"],transformed["mask1"]
             result_img = cv2.cvtColor(result_img, cv2.COLOR_RGB2BGR)
 
             #save images
@@ -162,6 +174,90 @@ class Occlusion_Generator:
         occluder_img=color_transfer_sot(occluder_img/255,cropped_src/255)
         occluder_img = (np.clip( occluder_img, 0.0, 1.0)*255).astype("uint8")
         return occluder_img
+
+    def annotate_data(self, img_name, src_img, im_dst_black):
+        self.iii += 1
+        bbox, scores, landmarks = self.mtcnn.detect(src_img)
+        src_img = cv2.cvtColor(src_img, cv2.COLOR_RGB2BGR)
+        img_copy = src_img.copy().astype(np.uint8)
+        box = bbox[0]
+        # print (">>>>>", box)
+        src_img = src_img[ int(box[0]):int(box[2]), int(box[1]):int(box[3]), : ]
+        img1 = cv2.resize(src_img, (112, 112))
+        image_data = img1.transpose(2, 0, 1)[np.newaxis].astype(np.float32) / 255
+        output = self.session.run([], {self.input_name: image_data})[1]
+
+        landmarks = output.reshape(-1, 2)
+        landmarks[:, 0] = landmarks[:, 0] * src_img.shape[1]
+        landmarks[:, 1] = landmarks[:, 1] * src_img.shape[0]
+        '''
+        left_eye :   33,35,36,37,38,39,40,41,42
+        right_eye :  87,88,89,90,91,93,94,95,96
+        nose :       73,74,76,77,78,79,80,82,83,84,85,86
+        mouth :      52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71
+        occlusion+left_eye + right_eye + nose + mouth #+ glass + black_glass
+        '''
+        label_list = [1]
+        left_eye_flag = 0
+        for per_i in [33,35,36,37,38,39,40,41,42]:
+            x = int(box[0])+int(landmarks[per_i][1])
+            y = int(box[1])+int(landmarks[per_i][0])
+            # cv2.imwrite(img_name, img_copy[x:x+200, y:y+400, :])
+            if im_dst_black[x, y,0]> 0 :
+                left_eye_flag += 1
+        if left_eye_flag >=2:
+            label_list.append(1)
+        else:
+            label_list.append(0)
+
+        
+        right_eye_flag = 0
+        for per_i in [87,88,89,90,91,93,94,95,96]:
+            x = int(box[0])+int(landmarks[per_i][1])
+            y = int(box[1])+int(landmarks[per_i][0])
+            if im_dst_black[x, y,0]> 0 :
+                right_eye_flag += 1
+        if right_eye_flag >=2:
+            label_list.append(1)
+        else:
+            label_list.append(0)
+
+        nose_flag = 0
+        for per_i in [73,74,76,77,78,79,80,82,83,84,85,86]:
+            x = int(box[0])+int(landmarks[per_i][1])
+            y = int(box[1])+int(landmarks[per_i][0])
+            if im_dst_black[x, y,0]> 0 :
+                nose_flag += 1
+        if nose_flag >=2:
+            label_list.append(1)
+        else:
+            label_list.append(0)
+        
+
+        mouth_flag = 0
+        for per_i in [52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71]:
+            x = int(box[0])+int(landmarks[per_i][1])
+            y = int(box[1])+int(landmarks[per_i][0])
+            if im_dst_black[x, y,0]> 0 :
+                mouth_flag += 1
+        if mouth_flag >=5:
+            label_list.append(1)
+        else:
+            label_list.append(0)
+        print ( img_name, ">>>>>> ", label_list)
+        
+
+        '''
+        for (x, y) in landmarks:
+            cv2.circle(img_copy, (int(box[1])+int(x), int(box[0])+int(y)), 2, (0, 0, 255), -1)
+            cv2.circle(im_dst_black, (int(box[1])+int(x), int(box[0])+int(y)), 2, (255, 255, 255), -1)
+        cv2.imwrite(img_name, img_copy)
+        '''
+        
+        # cv2.imwrite("{}.png".format( img_name.split(".")[0] ), im_dst_black)
+        
+        
+        pass 
 
 
 if __name__ == "__main__":

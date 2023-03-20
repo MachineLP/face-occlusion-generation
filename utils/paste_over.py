@@ -17,6 +17,7 @@ def paste_over(im_src,occluder_mask, im_dst,dst_mask, center,occlusion_mask,rand
 
     width_height_src = np.asarray([im_src.shape[1], im_src.shape[0]])
     width_height_dst = np.asarray([im_dst.shape[1], im_dst.shape[0]])
+    im_dst_black = np.zeros( [im_dst.shape[1], im_dst.shape[0] , 1 ], np.uint8 )
 
     center = np.round(center).astype(np.int32)
     raw_start_dst = center - width_height_src // 2
@@ -34,6 +35,7 @@ def paste_over(im_src,occluder_mask, im_dst,dst_mask, center,occlusion_mask,rand
 
 
     alpha = (region_src[..., 3:].astype(np.float32)/255)
+    alpha_copy = alpha
     if randOcc:
         if np.random.rand()<0.3:
             alpha*=np.random.uniform(0.4, 0.7)
@@ -56,4 +58,6 @@ def paste_over(im_src,occluder_mask, im_dst,dst_mask, center,occlusion_mask,rand
         
     dst_mask[start_dst[1]:end_dst[1], start_dst[0]:end_dst[0]]=cv2.subtract(dst_mask[start_dst[1]:end_dst[1], start_dst[0]:end_dst[0]],occluder_mask)
     im_dst[start_dst[1]:end_dst[1], start_dst[0]:end_dst[0]] = (alpha * color_src + (1 - alpha) * region_dst)
-    return im_dst,dst_mask,occlusion_mask
+    im_dst_black[start_dst[1]:end_dst[1], start_dst[0]:end_dst[0]] = alpha_copy*255
+    # cv2.imwrite( 'test.png', im_dst_black )
+    return im_dst,dst_mask,occlusion_mask, im_dst_black
