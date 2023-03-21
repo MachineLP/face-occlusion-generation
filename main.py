@@ -109,7 +109,7 @@ class Occlusion_Generator:
                 #self.img_label_list.append( ','.join(data_label[1:]) )
                 data_label = [ str(i) for i in data_label ] 
                 data_label_str = ','.join(data_label) + '\n'
-                with open(os.path.join(self.args["outputImgDir"], 'data_label.txt') ,'w') as f:    #设置文件对象
+                with open(os.path.join(self.args["outputImgDir"], 'data_label.txt') ,'a', encoding='utf-8') as f:    #设置文件对象
                     f.write(data_label_str) 
                 # "{}.jpg".format( image.split(".")[0] )
             except Exception as e:
