@@ -17,6 +17,7 @@ from utils.paste_over import *
 from utils.random_shape_generator import *
 from configs.config import cfg
 
+from pandas.core.frame import DataFrame
 import onnxruntime
 from face_stickers.mtcnn import MTCNN
 
@@ -54,6 +55,8 @@ class Occlusion_Generator:
         self.input_name = self.session.get_inputs()[0].name
         self.mtcnn = MTCNN('./face_stickers/pb/mtcnn.pb')
         self.iii = 0
+        self.img_name_list = []
+        self.img_label_list = []
 
     def occlude_images(self,index):
         try:
@@ -101,7 +104,13 @@ class Occlusion_Generator:
                 occlusion_mask[(occlusion_mask>0) & (occlusion_mask<255)]=255
                 #paste occluder to src image
                 result_img,result_mask,occlusion_mask,im_dst_black=paste_over(occluder_img,occluder_mask,src_img,src_mask,occluder_coord,occlusion_mask,self.args["randomOcclusion"])
-                self.annotate_data("{}.jpg".format( image.split(".")[0] ), img_copy, im_dst_black)
+                data_label = self.annotate_data("{}.jpg".format( image.split(".")[0] ), img_copy, im_dst_black)
+                #self.img_name_list.append( data_label[0] )
+                #self.img_label_list.append( ','.join(data_label[1:]) )
+                data_label = [ str(i) for i in data_label ] 
+                data_label_str = ','.join(data_label) + '\n'
+                with open(os.path.join(self.args["outputImgDir"], 'data_label.txt') ,'w') as f:    #设置文件对象
+                    f.write(data_label_str) 
                 # "{}.jpg".format( image.split(".")[0] )
             except Exception as e:
                 print(e)
@@ -244,7 +253,8 @@ class Occlusion_Generator:
             label_list.append(1)
         else:
             label_list.append(0)
-        print ( img_name, ">>>>>> ", label_list)
+        # print ( img_name, ">>>>>> ", label_list)
+        return [img_name] + label_list
         
 
         '''
@@ -255,9 +265,6 @@ class Occlusion_Generator:
         '''
         
         # cv2.imwrite("{}.png".format( img_name.split(".")[0] ), im_dst_black)
-        
-        
-        pass 
 
 
 if __name__ == "__main__":
