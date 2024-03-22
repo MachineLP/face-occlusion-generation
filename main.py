@@ -204,7 +204,7 @@ class Occlusion_Generator:
         right_eye :  87,88,89,90,91,93,94,95,96
         nose :       73,74,76,77,78,79,80,82,83,84,85,86
         mouth :      52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71
-        occlusion+left_eye + right_eye + nose + mouth #+ glass + black_glass
+        occlusion+left_eye + right_eye + nose + mouth #+ glass + black_glass + facemask
         '''
         label_list = [1]
         left_eye_flag = 0
@@ -249,7 +249,7 @@ class Occlusion_Generator:
             y = int(box[1])+int(landmarks[per_i][0])
             if im_dst_black[x, y,0]> 0 :
                 mouth_flag += 1
-        if mouth_flag >=5:
+        if mouth_flag >=3:
             label_list.append(1)
         else:
             label_list.append(0)
